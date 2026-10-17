@@ -1,108 +1,146 @@
-import { CLINICAL_FIELDS, DEFAULT_TITLE, formatDate, sexLabel, type Referral } from "@/lib/referral";
-import { cn } from "@/lib/utils";
+import { DEFAULT_TITLE, formatDate, sexLabel, type Referral } from "@/lib/referral";
 
-function Meta({ label, value, className }: { label: string; value: string; className?: string }) {
+/** Printed transcription of the provided Kosovo consultation-referral grid.
+ * It does not generate an official serial number, seal or institutional authorization. */
+function Line({ label, value = "" }: { label: string; value?: string }) {
   return (
-    <div className={cn("min-w-0", className)}>
-      <div className="text-[7.5pt] font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
-      <div className={cn("mt-0.5 min-h-[1.4em] border-b border-paper-rule pb-1 text-[10pt] break-words", !value && "text-muted-foreground/50")}>
-        {value || "—"}
-      </div>
+    <div className="kos-line">
+      <span className="kos-label">{label}</span>
+      <span className="kos-value">{value}</span>
     </div>
   );
 }
 
-function Section({ n, title, value }: { n: number; title: string; value: string }) {
+function NumberBoxes({ digits, count = 13 }: { digits: string; count?: number }) {
+  const chars = digits.replace(/\s/g, "").slice(0, count).split("");
   return (
-    <section className="doc-section mt-5">
-      <h3 className="flex items-baseline gap-2 border-b border-paper-rule pb-1 font-serif text-[11pt] font-semibold text-primary">
-        <span className="font-sans text-[8pt] font-medium tabular-nums text-teal">{String(n).padStart(2, "0")}</span>
-        {title}
-      </h3>
-      <p className={cn("mt-2 whitespace-pre-wrap break-words", !value.trim() && "italic text-muted-foreground/60")}>
-        {value.trim() || "Pa të dhëna të shënuara."}
-      </p>
-    </section>
+    <div className="kos-digits" aria-label="Numri personal">
+      {Array.from({ length: count }, (_, i) => (
+        <span className="kos-digit" key={i}>{chars[i] || ""}</span>
+      ))}
+    </div>
   );
 }
 
-export function ReferralDocument({ r }: { r: Referral }) {
-  const urgent = r.urgency === "Urgjent";
-  const clinical = CLINICAL_FIELDS.filter(([k]) => k === "reason" || k === "history" || k === "allergies" || r[k].trim());
-  let n = 0;
+function PaperText({ value }: { value: string }) {
+  return <div className="kos-written">{value.trim()}</div>;
+}
+
+function Row({ title, value, codeLabel, codeValue, rightSmall }: {
+  title: string; value: string; codeLabel?: string; codeValue?: string; rightSmall?: string;
+}) {
   return (
-    <article className="a4" aria-label="Pamja e udhëzimit për printim">
-      <header className="doc-keep flex items-start justify-between gap-6 border-b-2 border-primary pb-4">
-        <div className="min-w-0">
-          <div className="text-[8pt] font-medium uppercase tracking-[0.14em] text-muted-foreground">Institucioni udhëzues</div>
-          <div className="mt-1 font-serif text-[12.5pt] font-semibold leading-tight break-words">{r.fromInstitution || "—"}</div>
-          {r.fromDepartment && <div className="text-[9.5pt] text-muted-foreground">{r.fromDepartment}</div>}
+    <div className="kos-clinical-row">
+      <div className="kos-clinical-body">
+        <div className="kos-row-title">{title}</div>
+        <PaperText value={value} />
+      </div>
+      {codeLabel && (
+        <div className="kos-code-box">
+          <span className="kos-row-title">{codeLabel}</span>
+          <div className="kos-code-value">{codeValue || ""}</div>
+          {rightSmall && <span className="kos-code-note">{rightSmall}</span>}
         </div>
-        <div className="shrink-0 text-right">
-          <div className={cn("inline-block rounded-sm border px-2.5 py-1 text-[8pt] font-semibold uppercase tracking-[0.14em]",
-            urgent ? "border-urgent text-urgent" : r.urgency === "Prioritar" ? "border-warning text-warning" : "border-teal text-teal")}>
-            {r.urgency}
+      )}
+    </div>
+  );
+}
+
+function joinValues(...parts: string[]) {
+  return parts.map((p) => p.trim()).filter(Boolean).join("\n");
+}
+
+export function ReferralDocument({ r }: { r: Referral }) {
+  const patientLast = r.patientName.trim().split(/\s+/);
+  const surname = patientLast.length > 1 ? patientLast.pop() || "" : "";
+  const given = patientLast.join(" ");
+  const diagnosis = r.diagnosis.trim();
+  const exam = joinValues(r.exam, r.vitals ? "Shenjat vitale: " + r.vitals : "", r.diagnostics ? "Ekzaminimet diagnostike: " + r.diagnostics : "");
+  const purpose = joinValues(r.reason, r.question ? "Kërkesa për konsultë: " + r.question : "");
+  const issued = formatDate(r.issueDate);
+  const issueParts = issued.split(".");
+  return (
+    <article className="a4 kos-form" aria-label="Model elektronik i formularit të udhëzimit për konsultim">
+      <div className="kos-top-strip">
+        <span>MODEL ELEKTRONIK · DRX</span>
+        <span>UDHËZIMI PËR KONSULTIM / UPUT ZA KONSULTACIJU</span>
+        <span>DM 0101</span>
+      </div>
+      <div className="kos-title-line">
+        <strong>{(r.title || DEFAULT_TITLE).toUpperCase()} / UPUT ZA KONSULTACIJU</strong>
+        <span className="kos-title-note">Jo formular origjinal i lëshuar nga autoritetet</span>
+      </div>
+
+      <div className="kos-twin-tables">
+        <div className="kos-outline kos-person-side">
+          <Line label="Institucioni shëndetësor / Zdravstvena ustanova" value={r.fromInstitution} />
+          <Line label="Njësia / Odeljenje" value={r.fromDepartment} />
+          <Line label="Emri / Ime" value={given || r.patientName} />
+          <Line label="Mbiemri / Prezime" value={surname} />
+          <Line label="Emri i prindit / Ime roditelja" value={r.parentName} />
+          <Line label="Komuna / Opština" value={r.municipality} />
+          <Line label="Alergjitë / Alergije" value={r.allergies} />
+        </div>
+        <div className="kos-outline kos-id-side">
+          <div className="kos-number-row">
+            <span className="kos-label">Nr. personal / Lični broj</span>
+            <NumberBoxes digits={r.patientId} />
           </div>
-          <div className="mt-2 text-[9pt] text-muted-foreground">Data: <span className="tabular-nums text-paper-ink">{formatDate(r.issueDate) || "—"}</span></div>
+          <Line label="Datëlindja / Datum rođenja" value={r.patientDob ? formatDate(r.patientDob) : r.patientAge ? r.patientAge + " vjeç" : ""} />
+          <Line label="Mosha / Starost" value={r.patientAge} />
+          <Line label="Gjinia / Pol" value={sexLabel(r.patientSex)} />
+          <Line label="Adresa / Adresa" value={r.patientAddress} />
+          <Line label="Profesioni / Profesija" value={r.profession} />
+          <Line label="Tel. / Telefon" value={r.patientContact} />
         </div>
-      </header>
-
-      <div className="doc-keep mt-6 text-center">
-        <h1 className="font-serif text-[19pt] font-semibold tracking-[0.06em] text-primary">{(r.title || DEFAULT_TITLE).toUpperCase()}</h1>
-        <p className="mt-1 text-[8pt] uppercase tracking-[0.18em] text-muted-foreground">Dokument klinik – model i përgatitur në DRX</p>
       </div>
-
-      <div className="doc-keep mt-6 grid grid-cols-2 gap-x-6 gap-y-3">
-        <Meta label="Drejtuar institucionit" value={r.toInstitution} />
-        <Meta label="Specialiteti / shërbimi" value={r.toService} />
-      </div>
-
-      <div className="doc-keep mt-5 rounded-sm bg-muted/60 p-4">
-        <div className="mb-2 text-[8pt] font-semibold uppercase tracking-[0.14em] text-primary">Të dhënat e pacientit</div>
-        <div className="grid grid-cols-6 gap-x-4 gap-y-3">
-          <Meta className="col-span-3" label="Emri dhe mbiemri" value={r.patientName} />
-          <Meta className="col-span-2" label={r.patientDob ? "Datëlindja" : "Mosha"} value={r.patientDob ? formatDate(r.patientDob) + (r.patientAge ? ` (${r.patientAge} vjeç)` : "") : r.patientAge ? `${r.patientAge} vjeç` : ""} />
-          <Meta label="Gjinia" value={sexLabel(r.patientSex)} />
-          {r.patientId && <Meta className="col-span-2" label="Nr. personal" value={r.patientId} />}
-          {r.patientContact && <Meta className="col-span-2" label="Kontakti" value={r.patientContact} />}
-          {r.insuranceId && <Meta className="col-span-2" label="Nr. i sigurimit" value={r.insuranceId} />}
+      <div className="kos-insurance-grid">
+        <div className="kos-outline">
+          <Line label="Sigurimi shëndetësor / Zdravstveno osiguranje" value={r.insuranceCompany} />
+          <Line label="Kodi / Šifra" value={r.insuranceId} />
+        </div>
+        <div className="kos-outline kos-insurance-checks">
+          <div className="kos-check-title">Kategoria e sigurimit / Kategorija osiguranja</div>
+          <div className="kos-check-list">
+            <span>Sigurim i përgjithshëm <b className="kos-square" /></span>
+            <span>Pa sigurim <b className="kos-square" /></span>
+            <span>Sigurim tjetër <b className="kos-square" /></span>
+          </div>
         </div>
       </div>
 
-      {clinical.map(([k, label]) => <Section key={k} n={++n} title={label} value={r[k]} />)}
-
-      <section className="doc-section mt-5">
-        <h3 className="flex items-baseline gap-2 border-b border-paper-rule pb-1 font-serif text-[11pt] font-semibold text-primary">
-          <span className="font-sans text-[8pt] font-medium tabular-nums text-teal">{String(++n).padStart(2, "0")}</span>
-          Diagnoza e punës
-        </h3>
-        <div className="mt-2 flex items-start justify-between gap-4">
-          <p className={cn("min-w-0 whitespace-pre-wrap break-words", !r.diagnosis.trim() && "italic text-muted-foreground/60")}>{r.diagnosis.trim() || "Pa të dhëna të shënuara."}</p>
-          <div className="shrink-0 rounded-sm border border-paper-rule px-2 py-0.5 text-[9pt]"><span className="text-muted-foreground">ICD-10 </span><span className="font-semibold tabular-nums">{r.icd.trim() || "—"}</span></div>
-        </div>
-      </section>
-
-      <section className="doc-section mt-5 border-l-2 border-teal pl-4">
-        <h3 className="font-serif text-[11pt] font-semibold text-primary">Pyetja për konsulentin / konsultimi i kërkuar</h3>
-        <p className={cn("mt-2 whitespace-pre-wrap break-words", !r.question.trim() && "italic text-muted-foreground/60")}>{r.question.trim() || "Pa të dhëna të shënuara."}</p>
-      </section>
-
-      <footer className="doc-keep mt-10 grid grid-cols-2 gap-10">
+      <div className="kos-referral-band kos-outline">
         <div>
-          <div className="text-[8pt] font-semibold uppercase tracking-[0.14em] text-primary">Mjeku udhëzues</div>
-          <div className="mt-2 font-serif text-[11pt] font-semibold">{r.physicianName || "—"}</div>
-          {r.physicianSpec && <div className="text-[9.5pt] text-muted-foreground">{r.physicianSpec}</div>}
-          {r.physicianLicense && <div className="text-[9pt] text-muted-foreground">Nr. i licencës: {r.physicianLicense}</div>}
+          <span className="kos-row-title">Institucioni shëndetësor ku udhëzohet klienti / Zdravstvena institucija gde se upućuje pacijent</span>
+          <PaperText value={r.toInstitution} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div><div className="h-16 border-b border-paper-ink/60" /><div className="mt-1 text-center text-[8pt] text-muted-foreground">Nënshkrimi</div></div>
-          <div><div className="mx-auto h-16 w-16 rounded-full border border-dashed border-paper-ink/40" /><div className="mt-1 text-center text-[8pt] text-muted-foreground">Vula</div></div>
+        <div>
+          <span className="kos-row-title">Konsultanti / Konsulent</span>
+          <PaperText value={r.toService} />
         </div>
-      </footer>
+      </div>
 
-      <p className="doc-keep mt-8 border-t border-paper-rule pt-2 text-center text-[7pt] text-muted-foreground">
-        Model dokumenti i përgatitur nga mjeku në DRX. Nuk është formular zyrtar i lëshuar nga institucionet shtetërore.
-      </p>
+      <div className="kos-clinical-grid kos-outline">
+        <Row title="Qëllimi i udhëzimit / Razlog uputa" value={purpose} />
+        <Row title="Anamneza" value={r.history} />
+        <Row title="Ekzaminimet / Eksaminacije" value={exam} codeLabel="Kodi / Šifra: ICD - 9" codeValue={r.icd9} />
+        <Row title="Trajtimi i tanishëm / Sadašnji tretman" value={r.therapy} codeLabel="Kodi i barnave / Šifra lekova" codeValue={r.drugCode} />
+        <Row title="Diagnozat e punës / Radne dijagnoze" value={diagnosis} codeLabel="Kodi / Šifra: ICD - 10" codeValue={r.icd} rightSmall={"ICPC: " + (r.icpc || "______")} />
+      </div>
+
+      <div className="kos-footer">
+        <div className="kos-date-area">
+          <div className="kos-footer-date">{(issueParts.length === 3 ? issueParts : ["", "", ""]).map((x, i) => <span key={i}>{x}</span>)}</div>
+          <div className="kos-date-legend"><span>DD</span><span>MM</span><span>VVVV</span></div>
+        </div>
+        <div className="kos-place">Vendi / Mesto: <span>{r.municipality}</span></div>
+        <div className="kos-signature">
+          <div className="kos-signature-value">{r.physicianName}{r.physicianSpec ? ", " + r.physicianSpec : ""}</div>
+          <div className="kos-signature-line" />
+          <span>Nënshkrimi dhe faksimili i mjekut / Potpis i faksimil lekara</span>
+        </div>
+      </div>
+      <div className="kos-footnote">Model elektronik për plotësim dhe printim · DRX · Pa numër serial, vulë apo certifikim institucional.</div>
     </article>
   );
 }
