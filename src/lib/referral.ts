@@ -14,6 +14,11 @@ export interface Referral {
   patientId: string;
   patientSex: "" | "M" | "F";
   patientContact: string;
+  parentName: string;
+  municipality: string;
+  patientAddress: string;
+  profession: string;
+  insuranceCompany: string;
   insuranceId: string;
   reason: string;
   history: string;
@@ -24,6 +29,9 @@ export interface Referral {
   therapy: string;
   diagnosis: string;
   icd: string;
+  icd9: string;
+  drugCode: string;
+  icpc: string;
   question: string;
   physicianName: string;
   physicianSpec: string;
@@ -48,9 +56,9 @@ export function emptyReferral(issueDate = ""): Referral {
     fromInstitution: "", fromDepartment: "", toInstitution: "", toService: "",
     urgency: "Rutine", issueDate,
     patientName: "", patientDob: "", patientAge: "", patientId: "", patientSex: "",
-    patientContact: "", insuranceId: "",
+    patientContact: "", parentName: "", municipality: "", patientAddress: "", profession: "", insuranceCompany: "", insuranceId: "",
     reason: "", history: "", allergies: "", exam: "", vitals: "", diagnostics: "",
-    therapy: "", diagnosis: "", icd: "", question: "",
+    therapy: "", diagnosis: "", icd: "", icd9: "", drugCode: "", icpc: "", question: "",
     physicianName: "", physicianSpec: "", physicianLicense: "",
   };
 }
@@ -117,6 +125,9 @@ export function toPlainText(r: Referral): string {
   line("Nr. personal", r.patientId);
   line("Kontakti", r.patientContact);
   line("Nr. i sigurimit", r.insuranceId);
+  line("Emri i prindit", r.parentName);
+  line("Adresa", r.patientAddress);
+  line("Komuna", r.municipality);
   for (const [k, label] of CLINICAL_FIELDS) {
     const v = r[k].trim();
     if (v) out.push("", label.toUpperCase(), v);
@@ -128,42 +139,113 @@ export function toPlainText(r: Referral): string {
   out.push("", "MJEKU UDHËZUES");
   line("Emri", r.physicianName);
   line("Specializimi", r.physicianSpec);
+  line("Kodi ICD-9", r.icd9);
+  line("Kodi i barnave", r.drugCode);
+  line("ICPC", r.icpc);
   line("Nr. i licencës", r.physicianLicense);
   out.push("", "Dokument klinik – model i përgatitur në DRX.");
   return out.join("\n");
 }
 
-export interface Template { id: string; label: string; service: string; fields: Partial<Record<keyof Referral, string>> }
 
-/** Templates contain only prompts/labels — never findings or diagnoses. */
+export interface Template {
+  id: string;
+  label: string;
+  service: string;
+  fields: Partial<Record<keyof Referral, string>>;
+}
+
+/** Shabllonet janë udhëzues për mjekun, jo fakte për pacientin. */
 export const TEMPLATES: Template[] = [
-  { id: "kardio", label: "Kardiologji", service: "Kardiologji", fields: {
-    history: "Simptomat kryesore dhe kohëzgjatja: \nFaktorët e rrezikut kardiovaskular: \nNgjarje të mëparshme kardiake: ",
-    diagnostics: "EKG (data, përshkrimi): \nAnalizat laboratorike relevante: ",
-    question: "Kërkohet vlerësim kardiologjik për: " } },
-  { id: "neuro", label: "Neurologji", service: "Neurologji", fields: {
-    history: "Fillimi dhe ecuria e simptomave neurologjike: \nEpisode të ngjashme më parë: ",
-    exam: "Statusi neurologjik i orientuar: ",
-    question: "Kërkohet vlerësim neurologjik për: " } },
-  { id: "kirurgji", label: "Kirurgji", service: "Kirurgji e përgjithshme", fields: {
-    history: "Ankesat kryesore dhe kohëzgjatja: \nOperacione të mëparshme: ",
-    exam: "Gjetjet lokale: ",
-    question: "Kërkohet vlerësim kirurgjikal për: " } },
-  { id: "pediatri", label: "Pediatri", service: "Pediatri", fields: {
-    history: "Ankesat dhe kohëzgjatja: \nZhvillimi dhe vaksinimi (sipas kartelës): \nPesha / gjatësia: ",
-    question: "Kërkohet vlerësim pediatrik për: " } },
-  { id: "orl", label: "ORL", service: "Otorinolaringologji (ORL)", fields: {
-    history: "Ankesat ORL dhe kohëzgjatja: \nEpisode të përsëritura: ",
-    exam: "Gjetjet në ekzaminimin ORL: ",
-    question: "Kërkohet vlerësim ORL për: " } },
+  { id:"bosh", label:"Bosh", service:"", fields:{} },
+  { id:"kardio", label:"Kardiologji", service:"Kardiologji", fields:{
+    history:"Pyesni për fillimin, kohëzgjatjen, faktorët precipitantë dhe sëmundjet kardiovaskulare.",
+    vitals:"Sipas matjeve: TA, frekuenca kardiake, SpO₂.",
+    diagnostics:"EKG dhe analiza relevante, vetëm nëse janë kryer.",
+    question:"Cila është pyetja e saktë klinike për kardiologun?" }},
+  { id:"neuro", label:"Neurologji", service:"Neurologji", fields:{
+    history:"Kohëfillimi, progresioni, deficitet fokale dhe episodet e mëparshme.",
+    exam:"Status neurologjik i orientuar, nëse është kryer.",
+    question:"Çfarë vlerësimi neurologjik kërkohet?" }},
+  { id:"kirurgji", label:"Kirurgji", service:"Kirurgji e përgjithshme", fields:{
+    history:"Ankesa, kohëzgjatja, ndërhyrjet e mëparshme, shenjat shoqëruese.",
+    exam:"Gjetjet lokale të ekzaminimit, nëse janë vlerësuar.",
+    question:"Cila është arsyeja e konsultimit kirurgjikal?" }},
+  { id:"pediatri", label:"Pediatri", service:"Pediatri", fields:{
+    history:"Mosha, kohëzgjatja e simptomave, hidrimi, ushqyerja, vaksinimi sipas kartelës.",
+    vitals:"Temperatura, pesha dhe parametrat jetësorë sipas matjes.",
+    therapy:"Barna të përdorura me dozë dhe kohën e administrimit, vetëm nëse janë konfirmuar." }},
+  { id:"orl", label:"ORL", service:"Otorinolaringologji", fields:{
+    history:"Fillimi dhe përsëritja e simptomave të hundës, veshit ose fytit.",
+    exam:"Otoskopia, orofaringu, hunda, sipas ekzaminimit të kryer.",
+    question:"Kërkesa specifike për ORL." }},
+  { id:"gjinekologji", label:"Gjinekologji", service:"Gjinekologji", fields:{
+    history:"Ankesat, cikli menstrual, shtatzënia e mundshme sipas anamnezës, historiku obstetrik kur është relevant.",
+    exam:"Gjetjet e dokumentuara dhe kontrollet e kryera.",
+    question:"Pyetja për gjinekologun." }},
+  { id:"ortopedi", label:"Ortopedi", service:"Ortopedi / Traumatologji", fields:{
+    history:"Mekanizmi i dëmtimit, kohëzgjatja, kufizimi funksional.",
+    exam:"Vendndodhja e dhimbjes, ROM, statusi neurovaskular nëse është ekzaminuar.",
+    diagnostics:"Radiografia ose imazheria tjetër me datë, nëse është kryer." }},
+  { id:"radiologji", label:"Radiologji", service:"Radiologji / Imazheri", fields:{
+    reason:"Cilin ekzaminim kërkoni dhe për çfarë pyetje klinike?",
+    history:"Indikacioni, simptomat, faktorët e rrezikut relevant.",
+    diagnostics:"Imazheria paraprake, nëse ekziston." }},
+  { id:"interne", label:"Mjekësi interne", service:"Mjekësi interne", fields:{
+    history:"Sëmundjet kronike, simptomat kryesore dhe historiku relevant.",
+    therapy:"Barnat kronike dhe ndryshimet e fundit të trajtimit.",
+    diagnostics:"Analizat e disponueshme me njësi dhe datë." }},
+  { id:"dermatologji", label:"Dermatologji", service:"Dermatologji", fields:{
+    history:"Fillimi, lokalizimi, progresioni, kruajtja/dhimbja, ekspozimet relevante.",
+    exam:"Morfologjia dhe përhapja e lezioneve, vetëm nga ekzaminimi.",
+    therapy:"Trajtimet topike/sistemike të provuara, nëse dihen." }},
+  { id:"urologji", label:"Urologji", service:"Urologji", fields:{
+    history:"Simptomat urinare, kohëzgjatja, infeksionet e kaluara, dhimbja.",
+    diagnostics:"Urinaliza, urinokultura, imazheria, sipas ekzaminimeve të kryera.",
+    question:"Pyetja specifike për urologun." }},
+  { id:"urgjence", label:"Urgjencë", service:"Urgjencë / Specialist përkatës", fields:{
+    reason:"Cili është indikacioni për udhëzim urgjent?",
+    history:"Koha e fillimit dhe përkeqësimit, simptoma alarmi.",
+    vitals:"TA, pulsi, frekuenca respiratore, temperatura, SpO₂, GCS sipas matjeve.",
+    therapy:"Ndërhyrjet dhe barnat e administruara me kohë dhe dozë." }},
+  { id:"oftalmologji", label:"Oftalmologji", service:"Oftalmologji", fields:{
+    history:"Ndryshime të shikimit, kohëzgjatja, dhimbja, traumat, përdorimi i lenteve.",
+    exam:"Mprehtësia vizuale dhe gjetjet okulare vetëm nëse janë matur." }},
+  { id:"psikiatri", label:"Psikiatri", service:"Psikiatri", fields:{
+    history:"Shqetësimet, kohëzgjatja, faktorët shoqërues dhe historiku relevant.",
+    question:"Qëllimi i konsultës dhe urgjenca klinike." }}
 ];
 
 export function applyTemplate(r: Referral, t: Template): Referral {
-  const next = { ...r };
-  if (!next.toService.trim()) next.toService = t.service;
-  for (const [k, v] of Object.entries(t.fields) as [keyof Referral, string][]) {
-    const cur = String(next[k] ?? "").trim();
-    (next as Record<string, string>)[k] = cur ? `${cur}\n${v}` : v;
-  }
-  return next;
+  // Shablloni vendos vetëm shërbimin nëse ai është bosh.
+  // Udhëzimet mjekësore shfaqen në panelin e ndihmës, JO në dokument.
+  if (!t.service || r.toService.trim()) return { ...r };
+  return { ...r, toService: t.service };
+}
+
+export interface WritingSuggestion {
+  field: keyof Referral;
+  label: string;
+  note: string;
+}
+
+/** Rregulla lokale udhëzuese: nuk vendosin diagnozë dhe nuk dërgojnë tekst te serveri. */
+export function clinicalSuggestions(reason: string): WritingSuggestion[] {
+  const v = reason.toLocaleLowerCase("sq").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const general: WritingSuggestion[] = [
+    { field:"history", label:"Anamneza", note:"Shënoni fillimin, kohëzgjatjen, ecurinë dhe simptomat shoqëruese." },
+    { field:"exam", label:"Ekzaminimi", note:"Dokumentoni vetëm gjetjet që keni ekzaminuar." }
+  ];
+  if (/gjoks|palpit|zemr|dispne|frym|rrahje/.test(v))
+    return [...general,
+      { field:"vitals", label:"Parametrat vitalë", note:"Përfshini TA, pulsin dhe SpO₂ nëse janë matur." },
+      { field:"diagnostics", label:"EKG / analiza", note:"Përshkruani EKG-në dhe analizat vetëm nëse janë kryer." }];
+  if (/bark|abdomin|vjell|diarr|diar|nauze/.test(v))
+    return [...general,
+      { field:"vitals", label:"Parametrat vitalë", note:"Përfshini temperaturën dhe shenjat vitale nëse janë matur." },
+      { field:"exam", label:"Ekzaminimi abdominal", note:"Përshkruani lokalizimin, mbrojtjen muskulore dhe shenjat peritoneale, vetëm nëse janë ekzaminuar." }];
+  if (/marramend|dhimbje koke|parez|kriz|neurol/.test(v))
+    return [...general,
+      { field:"exam", label:"Statusi neurologjik", note:"Përshkruani orientimin, deficitet fokale dhe gjetjet relevante nëse janë vlerësuar." }];
+  return reason.trim().length >= 3 ? general : [];
 }
