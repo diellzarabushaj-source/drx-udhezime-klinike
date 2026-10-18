@@ -231,7 +231,7 @@ export interface WritingSuggestion {
 
 /** Rregulla lokale udhëzuese: nuk vendosin diagnozë dhe nuk dërgojnë tekst te serveri. */
 export function clinicalSuggestions(reason: string): WritingSuggestion[] {
-  const v = reason.toLocaleLowerCase("sq").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const v = reason.toLocaleLowerCase("sq").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const general: WritingSuggestion[] = [
     { field:"history", label:"Anamneza", note:"Shënoni fillimin, kohëzgjatjen, ecurinë dhe simptomat shoqëruese." },
     { field:"exam", label:"Ekzaminimi", note:"Dokumentoni vetëm gjetjet që keni ekzaminuar." }
