@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import {
   Building2, User, Stethoscope, FileText, ClipboardCheck, Printer, Copy, Check, Eraser, Sparkles,
   RotateCcw, ShieldCheck, Eye, PencilLine, CircleAlert, CircleCheck, UserRound, LayoutTemplate,
+  WandSparkles, Undo2, ListFilter, CheckCircle2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +14,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
-  TEMPLATES, applyTemplate, checkEssentials, cleanText, clinicalSuggestions, emptyReferral, todayISO, toPlainText,
+  TEMPLATES, applyTemplate, checkEssentials, cleanText, clinicalSuggestions, emptyReferral, templateCategory, todayISO, toPlainText,
   type Referral, type Urgency,
 } from "@/lib/referral";
 import { ReferralDocument } from "./ReferralDocument";
 import icdCatalog from "@/data/icd-qkmf.json";
+import { normalizeSearch, proposeQuickDraft, type QuickDraft } from "@/lib/smart-draft";
 
 type K = keyof Referral;
 
@@ -39,6 +41,10 @@ export function ReferralApp() {
   const [templateId, setTemplateId] = useState("bosh");
   const [templateSearch, setTemplateSearch] = useState("");
   const [icdSearch, setIcdSearch] = useState("");
+  const [category, setCategory] = useState("Të gjitha");
+  const [quickNote, setQuickNote] = useState("");
+  const [draft, setDraft] = useState<QuickDraft | null>(null);
+  const [undoSnapshot, setUndoSnapshot] = useState<Referral | null>(null);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -48,7 +54,14 @@ export function ReferralApp() {
   const set = (k: K) => (v: string) => setR((p) => ({ ...p, [k]: v }));
   const checks = useMemo(() => checkEssentials(r), [r]);
   const activeTemplate = TEMPLATES.find((t) => t.id === templateId) ?? TEMPLATES[0]!;
-  const templateMatches = TEMPLATES.filter((t) => t.label.toLocaleLowerCase("sq").includes(templateSearch.toLocaleLowerCase("sq")));
+  const categories = useMemo(() => ["Të gjitha", ...Array.from(new Set(TEMPLATES.map(templateCategory))).sort((a,b) => a.localeCompare(b, "sq"))], []);
+  const templateMatches = useMemo(() => {
+    const q = normalizeSearch(templateSearch);
+    return TEMPLATES.filter((t) => {
+      if (category !== "Të gjitha" && templateCategory(t) !== category) return false;
+      return !q || normalizeSearch([t.label, t.service, templateCategory(t), ...(t.keywords ?? [])].join(" ")).includes(q);
+    });
+  }, [templateSearch, category]);
   const suggestions = useMemo(() => clinicalSuggestions(r.reason), [r.reason]);
   const icdMatches = useMemo(() => {
     const q = icdSearch.toLocaleLowerCase("sq").trim();
@@ -57,6 +70,31 @@ export function ReferralApp() {
   }, [icdSearch]);
   const done = checks.filter((c) => c.done).length;
   const pct = Math.round((done / checks.length) * 100);
+
+  const prepareDraft = () => {
+    if (!quickNote.trim()) {
+      flash("Shënoni të paktën një ankesë ose të dhënë klinike.");
+      return;
+    }
+    const proposal = proposeQuickDraft(r, activeTemplate, quickNote);
+    setDraft(proposal);
+    if (!proposal.changes.length) flash("Nuk ka fusha të zbrazëta për t'u plotësuar; të dhënat ekzistuese nuk ndryshohen.");
+  };
+
+  const acceptDraft = () => {
+    if (!draft?.changes.length) return;
+    setUndoSnapshot(r);
+    setR((p) => proposeQuickDraft(p, activeTemplate, quickNote).next);
+    setDraft(null);
+    flash("Drafti u pranua. Rishikoni klinikisht të gjitha rubrikat.");
+  };
+
+  const undoDraft = () => {
+    if (!undoSnapshot) return;
+    setR(undoSnapshot);
+    setUndoSnapshot(null);
+    flash("Ndryshimet e fundit të draftit u zhbënë.");
+  };
 
   const flash = (msg: string) => { setNotice(msg); window.setTimeout(() => setNotice(""), 2200); };
 
@@ -170,25 +208,50 @@ export function ReferralApp() {
             {/* Tools */}
             <Card icon={LayoutTemplate} title="Shabllone dhe mjete" subtitle="Shabllonet shtojnë vetëm pyetje udhëzuese, asnjë gjetje apo diagnozë.">
               <div className="space-y-3">
-                <label className="block text-sm font-medium" htmlFor="template-search">Gjej shabllonin</label>
-                <Input id="template-search" type="search" value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Kardiologji, neurologji, pediatri, ORL…" autoComplete="off" />
-                <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pb-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label htmlFor="template-search">Gjej shabllonin klinik</Label>
+                  <span className="rounded-full bg-teal-soft px-2.5 py-1 text-xs font-semibold text-teal">{TEMPLATES.length} shabllone</span>
+                </div>
+                <Input id="template-search" type="search" value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  placeholder="P.sh. palpitacione, diabet, dhimbje barku, pediatri…" autoComplete="off" />
+                <div className="flex items-center gap-2">
+                  <ListFilter className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <select id="template-category" aria-label="Filtro shabllonet sipas kategorisë" className={selectCls + " min-w-0 flex-1"}
+                    value={category} onChange={(e) => setCategory(e.target.value)}>
+                    {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <span className="text-xs tabular-nums text-muted-foreground">{templateMatches.length} rezultate</span>
+                </div>
+                <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border border-border p-1.5" role="group" aria-label="Zgjidh shabllonin">
                   {templateMatches.map((t) => (
-                    <Button key={t.id} type="button" variant={templateId === t.id ? "default" : "outline"} size="sm"
-                      aria-pressed={templateId === t.id}
+                    <button key={t.id} type="button" aria-pressed={templateId === t.id}
                       onClick={() => {
                         setTemplateId(t.id);
-                        setR((p) => applyTemplate(p, t));
-                        flash(t.id === "bosh" ? "Shabllon bosh i zgjedhur — të dhënat ruhen." : "U hap udhëzuesi për " + t.label + ".");
-                      }}>
-                      <LayoutTemplate className="h-3.5 w-3.5" />{t.label}
-                    </Button>
+                        setDraft(null);
+                        setR((p) => ({
+                          ...applyTemplate(p,t),
+                          toService: (!p.toService.trim() || (activeTemplate.service && p.toService === activeTemplate.service))
+                            ? (t.service || p.toService)
+                            : p.toService,
+                        }));
+                        flash(t.id === "bosh" ? "Shabllon bosh i zgjedhur." : "U zgjodh shablloni: " + t.label + ".");
+                      }}
+                      className={cn("flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition",
+                        templateId === t.id ? "bg-primary text-primary-foreground" : "hover:bg-muted focus-visible:bg-muted")}>
+                      <span className="min-w-0">
+                        <span className="block font-medium">{t.label}</span>
+                        <span className={cn("block text-xs",templateId===t.id?"opacity-75":"text-muted-foreground")}>{templateCategory(t)}</span>
+                      </span>
+                      {templateId===t.id && <CheckCircle2 className="h-4 w-4 shrink-0" />}
+                    </button>
                   ))}
+                  {!templateMatches.length && <p className="p-3 text-sm text-muted-foreground">Nuk u gjet asnjë shabllon. Provoni një simptomë ose specialitet tjetër.</p>}
                 </div>
                 {activeTemplate && activeTemplate.id !== "bosh" && (
                   <div className="rounded-md border border-teal/25 bg-teal-soft/40 p-3 text-sm">
-                    <p className="font-semibold">Çfarë të dokumentoni për {activeTemplate.label}</p>
-                    <p className="mt-1 mb-2 text-xs text-muted-foreground">Këto janë udhëzime për ju, nuk futen automatikisht në udhëzimin e pacientit.</p>
+                    <p className="font-semibold">Udhëzuesi: {activeTemplate.label}</p>
+                    <p className="mt-1 mb-2 text-xs text-muted-foreground">Pyetjet janë për mjekun. Nuk futen në dokument pa u shkruar e konfirmuar.</p>
                     <ul className="space-y-2">
                       {Object.entries(activeTemplate.fields).map(([key, note]) => (
                         <li key={key} className="flex items-start justify-between gap-2">
@@ -200,6 +263,50 @@ export function ReferralApp() {
                   </div>
                 )}
               </div>
+              <section aria-label="Përgatitje automatike e udhëzimit" className="mt-5 rounded-xl border-2 border-teal/20 bg-teal-soft/20 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <WandSparkles className="h-5 w-5 text-teal" />
+                  <h3 className="font-serif text-base font-semibold">Shkruaj shkurt, krijo draftin</h3>
+                </div>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Shkruaj një rresht ose disa shënime. Për shembull: <em>palpitacione prej 3 ditësh; TA: 150/90; EKG: e kryer</em>.
+                  Rubrikat plotësohen vetëm nga fjalët e tua dhe nga kërkesa e përgjithshme e shabllonit.
+                </p>
+                <Label htmlFor="quick-draft">Shënimi i mjekut</Label>
+                <Textarea id="quick-draft" value={quickNote}
+                  onChange={(e) => { setQuickNote(e.target.value); setDraft(null); }}
+                  className="mt-1.5 min-h-28 bg-card" rows={4}
+                  placeholder={"Ankesa: kollë prej 5 ditësh; TA: 120/80; Temp: 38.2°C; EKG: e kryer; Trajtimi: ...\nDiagnoza: shkruaj vetëm nëse e ke vendosur\nPyetja: ..."} />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" onClick={prepareDraft}><WandSparkles className="h-4 w-4" /> Përgatit draftin</Button>
+                  {undoSnapshot && <Button type="button" variant="outline" onClick={undoDraft}><Undo2 className="h-4 w-4" /> Zhbëj pranimin</Button>}
+                </div>
+                {draft && (
+                  <div className="mt-4 rounded-lg border border-border bg-card p-3" aria-live="polite">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-semibold">Parapamja e plotësimit</h4>
+                      <span className="text-xs font-medium">{draft.changes.length} rubrika të propozuara</span>
+                    </div>
+                    <p className="mt-1 mb-3 text-xs text-muted-foreground">Kjo është vetëm një propozim. Asgjë nuk vendoset në dokument pa klikuar “Prano draftin”.</p>
+                    <div className="max-h-80 space-y-3 overflow-y-auto">
+                      {draft.changes.map((ch) => (
+                        <div key={ch.field} className="rounded-md border border-border bg-background p-2.5">
+                          <div className="flex justify-between gap-2 text-xs font-semibold"><span>{ch.label}</span><span className="text-muted-foreground">{ch.source}</span></div>
+                          <p className="mt-1 whitespace-pre-wrap break-words text-sm">{ch.proposed}</p>
+                        </div>
+                      ))}
+                      {draft.skipped.length > 0 && <p className="text-xs text-muted-foreground">{draft.skipped.length} fusha ekzistuese u ruajtën pa u ndryshuar.</p>}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button disabled={!draft.changes.length} type="button" onClick={acceptDraft}><Check className="h-4 w-4" /> Prano draftin</Button>
+                      <Button variant="outline" type="button" onClick={() => setDraft(null)}><X className="h-4 w-4" /> Anulo</Button>
+                    </div>
+                  </div>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Asnjë diagnozë, rezultat, alergji apo dozë nuk supozohet. Mjeku verifikon përmbajtjen. Shënimi nuk dërgohet në server.
+                </p>
+              </section>
               <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                 <Button variant="secondary" size="sm" onClick={cleanAll}><Eraser className="h-4 w-4" />Pastro formatimin</Button>
                 <AlertDialog>
@@ -213,7 +320,7 @@ export function ReferralApp() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Anulo</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); setTemplateId("bosh"); setTemplateSearch(""); setIcdSearch(""); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); setTemplateId("bosh"); setTemplateSearch(""); setIcdSearch(""); setCategory("Të gjitha"); setQuickNote(""); setDraft(null); setUndoSnapshot(null); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
