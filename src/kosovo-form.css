@@ -1,0 +1,250 @@
+
+/* The A4 document deliberately reproduces the dense line-grid format
+   of the photographed Kosovo referral form. Interface colours never
+   enter the printable paper. This is not a government-issued form. */
+.a4.kos-form {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 10mm 11mm 9mm;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8pt;
+  font-weight: 400;
+  line-height: 1.15;
+  color: #111;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08), 0 20px 55px rgba(0,0,0,.10);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.kos-form *, .kos-form *::before, .kos-form *::after { box-sizing: border-box; }
+.kos-form .kos-top-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 5mm;
+  font-size: 5.5pt;
+  letter-spacing: .01em;
+  padding: 0 1mm;
+}
+.kos-top-strip span:nth-child(2) { font-weight: 600; font-size: 5.1pt; }
+.kos-form .kos-title-line {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 9.5mm;
+  text-align: center;
+}
+.kos-title-line strong {
+  font-family: "Times New Roman", Times, serif;
+  letter-spacing: .025em;
+  font-size: 11.5pt;
+  font-weight: bold;
+}
+.kos-title-note { font-size: 5.5pt; color: #444; margin-top: .8mm; }
+.kos-outline { border: .22mm solid #171717; }
+.kos-twin-tables {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.8mm;
+  min-height: 70mm;
+}
+.kos-person-side, .kos-id-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kos-line {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 8mm;
+  border-bottom: .18mm solid #343434;
+  align-items: stretch;
+  min-width: 0;
+}
+.kos-line:last-child { border-bottom: 0; }
+.kos-label {
+  flex: 0 0 42%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: .8mm 1mm;
+  font-size: 6.05pt;
+  line-height: 1.16;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.kos-value {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  border-left: .18mm solid #555;
+  padding: .7mm 1mm;
+  font-size: 7.7pt;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.kos-id-side .kos-line { min-height: 7.4mm; }
+.kos-number-row {
+  display: flex;
+  min-height: 12mm;
+  flex-direction: column;
+  border-bottom: .18mm solid #343434;
+  padding: .55mm .9mm;
+}
+.kos-number-row .kos-label { min-height: 3mm; padding: 0; flex: 0 0 auto; }
+.kos-digits {
+  display: flex;
+  width: 100%;
+  height: 5.8mm;
+  margin-top: .25mm;
+  justify-content: stretch;
+}
+.kos-digit {
+  flex: 1 1 auto;
+  border: .18mm solid #3a3a3a;
+  border-right: 0;
+  display: grid;
+  place-items: center;
+  font-size: 7pt;
+  min-width: 0;
+}
+.kos-digit:last-child { border-right: .18mm solid #3a3a3a; }
+.kos-insurance-grid {
+  margin-top: 1.6mm;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.8mm;
+  min-height: 19mm;
+}
+.kos-insurance-grid .kos-outline { min-width: 0; }
+.kos-insurance-grid .kos-outline:first-child { display: flex; flex-direction: column; }
+.kos-insurance-grid .kos-line { min-height: 7.5mm; }
+.kos-insurance-checks { display: flex; flex-direction: column; padding: .75mm 1mm; }
+.kos-check-title { font-size: 6.15pt; font-weight: 600; }
+.kos-check-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin-top: 1mm;
+  gap: .8mm;
+}
+.kos-check-list > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 5.8pt;
+}
+.kos-square { display: inline-block; width: 3mm; height: 3mm; border: .2mm solid #222; }
+.kos-referral-band {
+  margin-top: 3mm;
+  display: grid;
+  grid-template-columns: 65% 35%;
+  min-height: 15mm;
+}
+.kos-referral-band > div { padding: 1mm 1.2mm; min-width: 0; }
+.kos-referral-band > div+div { border-left: .18mm solid #222; }
+.kos-row-title {
+  display: block;
+  font-size: 6.3pt;
+  line-height: 1.15;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.kos-referral-band .kos-written { margin-top: 1.4mm; }
+.kos-clinical-grid {
+  display: flex;
+  flex-direction: column;
+  margin-top: 1mm;
+  min-height: 117mm;
+  flex: 1 1 auto;
+}
+.kos-clinical-row {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 18mm;
+  border-bottom: .18mm solid #333;
+  min-width: 0;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.kos-clinical-row:last-child { border-bottom: 0; min-height: 24mm; }
+.kos-clinical-row:nth-child(2) { min-height: 27mm; }
+.kos-clinical-row:nth-child(3) { min-height: 29mm; }
+.kos-clinical-row:nth-child(4) { min-height: 25mm; }
+.kos-clinical-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 1.1mm 1.3mm 1mm;
+}
+.kos-clinical-body > .kos-written {
+  padding-top: 1.9mm;
+}
+.kos-written {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8pt;
+  line-height: 1.25;
+}
+.kos-code-box {
+  flex: 0 0 23%;
+  border-left: .22mm solid #333;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1mm 1mm;
+}
+.kos-code-box .kos-row-title { font-size: 6.7pt; }
+.kos-code-value { padding-top: 2mm; overflow-wrap: anywhere; }
+.kos-code-note { margin-top: auto; font-size: 6.3pt; padding-bottom: 1mm; }
+.kos-footer {
+  display: grid;
+  grid-template-columns: 21% 27% 52%;
+  gap: 1mm;
+  align-items: end;
+  margin-top: 6mm;
+  min-height: 18mm;
+}
+.kos-date-area { padding-bottom: 1mm; }
+.kos-footer-date { display: flex; }
+.kos-footer-date span {
+  border-bottom: .25mm solid #111;
+  border-left: .25mm solid #111;
+  min-height: 6mm;
+  text-align: center;
+  flex: 1;
+  font-size: 8pt;
+  padding-top: 1mm;
+}
+.kos-footer-date span:last-child { border-right: .25mm solid #111; }
+.kos-date-legend { display: grid; grid-template-columns: repeat(3,1fr); font-size: 5.7pt; text-align: center; }
+.kos-place { font-size: 7pt; padding-bottom: 4mm; }
+.kos-place span { display: inline-block; min-width: 17mm; border-bottom: .2mm solid #333; }
+.kos-signature { text-align: center; padding-bottom: 0; min-width: 0; }
+.kos-signature-value { font-size: 8pt; overflow-wrap: anywhere; }
+.kos-signature-line { border-bottom: .25mm solid #000; margin-top: 3mm; }
+.kos-signature > span { font-size: 6pt; line-height: 1.1; }
+.kos-footnote { margin-top: 2.5mm; font-size: 5.6pt; color: #333; text-align: left; }
+@page { size: A4 portrait; margin: 0; }
+@media print {
+  html, body, #root { margin: 0 !important; padding: 0 !important; width: auto !important; background: white !important; }
+  #root { overflow: visible !important; }
+  .a4.kos-form {
+    display: flex !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 10mm 11mm 9mm !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    color: #111 !important;
+    background: white !important;
+    font-size: 8pt !important;
+  }
+  .kos-form .kos-clinical-row { break-inside: avoid; }
+}
