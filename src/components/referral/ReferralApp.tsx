@@ -13,10 +13,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
-  TEMPLATES, applyTemplate, checkEssentials, cleanText, emptyReferral, todayISO, toPlainText,
+  TEMPLATES, applyTemplate, checkEssentials, cleanText, clinicalSuggestions, emptyReferral, todayISO, toPlainText,
   type Referral, type Urgency,
 } from "@/lib/referral";
 import { ReferralDocument } from "./ReferralDocument";
+import icdCatalog from "@/data/icd-qkmf.json";
 
 type K = keyof Referral;
 
@@ -35,6 +36,9 @@ export function ReferralApp() {
   const [r, setR] = useState<Referral>(() => emptyReferral());
   const [view, setView] = useState<"form" | "preview">("form");
   const [copied, setCopied] = useState(false);
+  const [templateId, setTemplateId] = useState("bosh");
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [icdSearch, setIcdSearch] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -43,6 +47,14 @@ export function ReferralApp() {
 
   const set = (k: K) => (v: string) => setR((p) => ({ ...p, [k]: v }));
   const checks = useMemo(() => checkEssentials(r), [r]);
+  const activeTemplate = TEMPLATES.find((t) => t.id === templateId) ?? TEMPLATES[0]!;
+  const templateMatches = TEMPLATES.filter((t) => t.label.toLocaleLowerCase("sq").includes(templateSearch.toLocaleLowerCase("sq")));
+  const suggestions = useMemo(() => clinicalSuggestions(r.reason), [r.reason]);
+  const icdMatches = useMemo(() => {
+    const q = icdSearch.toLocaleLowerCase("sq").trim();
+    if (q.length < 2) return [];
+    return icdCatalog.rows.filter((row) => [row.code, row.label_sq, ...row.aliases].some((v) => v.toLocaleLowerCase("sq").includes(q))).slice(0, 8);
+  }, [icdSearch]);
   const done = checks.filter((c) => c.done).length;
   const pct = Math.round((done / checks.length) * 100);
 
@@ -157,12 +169,36 @@ export function ReferralApp() {
 
             {/* Tools */}
             <Card icon={LayoutTemplate} title="Shabllone dhe mjete" subtitle="Shabllonet shtojnë vetëm pyetje udhëzuese, asnjë gjetje apo diagnozë.">
-              <div className="flex flex-wrap gap-2">
-                {TEMPLATES.map((t) => (
-                  <Button key={t.id} variant="outline" size="sm" onClick={() => { setR((p) => applyTemplate(p, t)); flash(`U shtuan pyetjet për ${t.label}.`); }}>
-                    <Sparkles className="h-3.5 w-3.5 text-teal" />{t.label}
-                  </Button>
-                ))}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium" htmlFor="template-search">Gjej shabllonin</label>
+                <Input id="template-search" type="search" value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Kardiologji, neurologji, pediatri, ORL…" autoComplete="off" />
+                <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pb-1">
+                  {templateMatches.map((t) => (
+                    <Button key={t.id} type="button" variant={templateId === t.id ? "default" : "outline"} size="sm"
+                      aria-pressed={templateId === t.id}
+                      onClick={() => {
+                        setTemplateId(t.id);
+                        setR((p) => applyTemplate(p, t));
+                        flash(t.id === "bosh" ? "Shabllon bosh i zgjedhur — të dhënat ruhen." : "U hap udhëzuesi për " + t.label + ".");
+                      }}>
+                      <LayoutTemplate className="h-3.5 w-3.5" />{t.label}
+                    </Button>
+                  ))}
+                </div>
+                {activeTemplate && activeTemplate.id !== "bosh" && (
+                  <div className="rounded-md border border-teal/25 bg-teal-soft/40 p-3 text-sm">
+                    <p className="font-semibold">Çfarë të dokumentoni për {activeTemplate.label}</p>
+                    <p className="mt-1 mb-2 text-xs text-muted-foreground">Këto janë udhëzime për ju, nuk futen automatikisht në udhëzimin e pacientit.</p>
+                    <ul className="space-y-2">
+                      {Object.entries(activeTemplate.fields).map(([key, note]) => (
+                        <li key={key} className="flex items-start justify-between gap-2">
+                          <span>{note}</span>
+                          <Button size="sm" type="button" variant="ghost" onClick={() => focusField(key)} className="shrink-0">Plotëso</Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
               <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                 <Button variant="secondary" size="sm" onClick={cleanAll}><Eraser className="h-4 w-4" />Pastro formatimin</Button>
@@ -177,7 +213,7 @@ export function ReferralApp() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Anulo</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); setTemplateId("bosh"); setTemplateSearch(""); setIcdSearch(""); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -220,12 +256,31 @@ export function ReferralApp() {
                 <Field k="patientId" label="Nr. personal (opsional)" r={r} set={set} autoComplete="off" />
                 <Field k="patientContact" label="Kontakti (opsional)" r={r} set={set} autoComplete="off" />
                 <Field k="insuranceId" label="Nr. i sigurimit (nëse kërkohet)" r={r} set={set} autoComplete="off" />
+                <Field k="parentName" label="Emri i prindit (sipas formularit)" r={r} set={set} autoComplete="off" />
+                <Field k="patientAddress" label="Adresa" r={r} set={set} autoComplete="off" />
+                <Field k="municipality" label="Komuna / vendi" r={r} set={set} />
+                <Field k="profession" label="Profesioni" r={r} set={set} />
+                <Field k="insuranceCompany" label="Kompania e sigurimit (nëse ekziston)" r={r} set={set} />
               </Grid>
             </Card>
 
             <Card id="sec-clinical" icon={Stethoscope} title="Përmbajtja klinike" subtitle="Shkruani vetëm të dhëna të verifikuara. Rreshti i ri ruhet në dokument.">
               <div className="space-y-4">
                 <Area k="reason" label="Arsyeja e udhëzimit" r={r} set={set} req rows={2} placeholder="Përshkruani shkurt pse po udhëzohet pacienti te specialisti." />
+                {suggestions.length > 0 && (
+                  <section className="rounded-lg border border-teal/25 bg-teal-soft/35 p-4" aria-label="Ndihma gjatë shkrimit">
+                    <div className="mb-1 flex items-center gap-2 font-semibold"><Sparkles className="h-4 w-4" /> Ndihmë gjatë shkrimit</div>
+                    <p className="mb-3 text-xs text-muted-foreground">Bazuar në tekstin e ankesës, kontrolloni nëse keni dokumentuar këto pika. Asnjë vlerë klinike nuk krijohet automatikisht.</p>
+                    <ul className="space-y-2">
+                      {suggestions.map((tip,i) => (
+                        <li key={tip.field + i} className="flex items-start justify-between gap-3 text-sm">
+                          <div><strong>{tip.label}</strong><p className="text-muted-foreground">{tip.note}</p></div>
+                          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => focusField(tip.field)}>Plotëso</Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
                 <Area k="history" label="Anamneza" r={r} set={set} req rows={4} placeholder="Ankesat aktuale, fillimi dhe ecuria; sëmundjet e mëparshme dhe anamneza relevante." />
                 <Area k="allergies" label="Alergjitë" r={r} set={set} req rows={1} placeholder="Shënoni alergjitë e njohura ose “Nuk ka alergji të njohura”." />
                 <Area k="exam" label="Ekzaminimi objektiv" r={r} set={set} rows={3} placeholder="Gjetjet e fokusuara të ekzaminimit fizik." />
@@ -239,7 +294,28 @@ export function ReferralApp() {
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
                   <Area k="diagnosis" label="Diagnoza e punës" r={r} set={set} req rows={2} placeholder="Diagnoza e punës sipas vlerësimit tuaj klinik." />
-                  <Field k="icd" label="Kodi ICD-10" r={r} set={set} placeholder="P.sh. X00.0" hint="Shënohet nga mjeku" />
+                  <div className="space-y-2">
+                    <Field k="icd" label="Kodi ICD-10" r={r} set={set} placeholder="P.sh. I10" hint="Konfirmohet nga mjeku" />
+                    <Label htmlFor="f-icdSearch">Kërko në katalogun DRX QKMF</Label>
+                    <Input id="f-icdSearch" type="search" value={icdSearch} onChange={(e) => setIcdSearch(e.target.value)} placeholder="Shkruaj kodin ose termin" />
+                    {icdMatches.length > 0 && (
+                      <div className="max-h-56 overflow-y-auto rounded-md border bg-card p-1 text-xs" role="listbox" aria-label="Sugjerime ICD-10">
+                        {icdMatches.map((c) => (
+                          <button key={c.code} type="button" role="option" aria-selected={r.icd === c.code}
+                            onClick={() => { set("icd")(c.code); setIcdSearch(c.code); flash("Kodi u zgjodh; kontrolloni diagnozën klinike."); }}
+                            className="flex w-full items-start gap-2 rounded px-2 py-2 text-left hover:bg-muted focus-visible:bg-muted">
+                            <strong>{c.code}</strong><span>{c.label_sq}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">Katalog i kufizuar me {icdCatalog.count} kode të shpeshta nga DRX; nuk përfshin tërë ICD-10. Kërkimi kryhet vetëm në pajisjen tuaj.</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field k="icd9" label="Kodi ICD-9 (nëse përdoret)" r={r} set={set} />
+                  <Field k="drugCode" label="Kodi i barnave" r={r} set={set} />
+                  <Field k="icpc" label="Kodi ICPC" r={r} set={set} />
                 </div>
                 <Area k="question" label="Pyetja për konsulentin / konsultimi i kërkuar" r={r} set={set} req rows={3} placeholder="Çfarë kërkoni konkretisht nga specialisti? (vlerësim, konfirmim diagnoze, rekomandim trajtimi…)" />
               </div>
