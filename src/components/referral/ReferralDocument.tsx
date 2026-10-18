@@ -1,4 +1,4 @@
-import { DEFAULT_TITLE, formatDate, sexLabel, type Referral } from "@/lib/referral";
+import { DEFAULT_TITLE, formatDate, sexLabel, checkEssentials, type Referral } from "@/lib/referral";
 import { findTemplateSlots, TEMPLATE_MARKER } from "@/lib/ready-template";
 
 /** Printed transcription of the provided Kosovo consultation-referral grid.
@@ -74,6 +74,7 @@ export function ReferralDocument({ r }: { r: Referral }) {
   const exam = joinValues(r.exam, r.vitals ? "Shenjat vitale: " + r.vitals : "", r.diagnostics ? "Ekzaminimet diagnostike: " + r.diagnostics : "");
   const purpose = joinValues(r.reason, r.question ? "Kërkesa për konsultë: " + r.question : "");
   const pending = findTemplateSlots(r).length;
+  const missing = checkEssentials(r).filter((item) => !item.done).length;
   const issued = formatDate(r.issueDate);
   const issueParts = issued.split(".");
   return (
@@ -86,7 +87,7 @@ export function ReferralDocument({ r }: { r: Referral }) {
       <div className="kos-title-line">
         <strong>{(r.title || DEFAULT_TITLE).toUpperCase()} / UPUT ZA KONSULTACIJU</strong>
         <span className="kos-title-note">Jo formular origjinal i lëshuar nga autoritetet</span>
-        {pending > 0 && <span className="kos-unfinished-note">DRAFT I PAPLOTË · {pending} hapësira për plotësim/konfirmim</span>}
+        {(pending > 0 || missing > 0) && <span className="kos-unfinished-note">DRAFT I PAPLOTË · {pending} hapësira për plotësim/konfirmim · {missing} rubrika bazë pa verifikim</span>}
       </div>
 
       <div className="kos-twin-tables">
