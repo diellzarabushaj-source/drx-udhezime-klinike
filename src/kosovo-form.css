@@ -248,3 +248,27 @@
   }
   .kos-form .kos-clinical-row { break-inside: avoid; }
 }
+
+.kos-unfinished-note {
+  display:block;
+  margin-top: 1mm;
+  padding: 0.8mm 1.6mm;
+  border: .16mm solid #ad5d37;
+  color: #873911;
+  font-size: 6.1pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+.kos-placeholder {
+  border-radius: 1.5px;
+  background: #fff3d7;
+  color: #7c3b19;
+  font-weight: 600;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+@media print {
+  .kos-placeholder { background: #fff3d7 !important; color: #71330b !important; }
+  .kos-unfinished-note { color: #71330b !important; }
+}
