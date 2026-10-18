@@ -318,50 +318,6 @@ export function ReferralApp() {
                   </div>
                 )}
               </div>
-              <section aria-label="Përgatitje automatike e udhëzimit" className="mt-5 rounded-xl border-2 border-teal/20 bg-teal-soft/20 p-4">
-                <div className="mb-2 flex items-center gap-2">
-                  <WandSparkles className="h-5 w-5 text-teal" />
-                  <h3 className="font-serif text-base font-semibold">Shkruaj shkurt, krijo draftin</h3>
-                </div>
-                <p className="mb-3 text-sm text-muted-foreground">
-                  Shkruaj një rresht ose disa shënime. Për shembull: <em>palpitacione prej 3 ditësh; TA: 150/90; EKG: e kryer</em>.
-                  Rubrikat plotësohen vetëm nga fjalët e tua dhe nga kërkesa e përgjithshme e shabllonit.
-                </p>
-                <Label htmlFor="quick-draft">Shënimi i mjekut</Label>
-                <Textarea id="quick-draft" value={quickNote}
-                  onChange={(e) => { setQuickNote(e.target.value); setDraft(null); }}
-                  className="mt-1.5 min-h-28 bg-card" rows={4}
-                  placeholder={"Ankesa: kollë prej 5 ditësh; TA: 120/80; Temp: 38.2°C; EKG: e kryer; Trajtimi: ...\nDiagnoza: shkruaj vetëm nëse e ke vendosur\nPyetja: ..."} />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button type="button" onClick={prepareDraft}><WandSparkles className="h-4 w-4" /> Përgatit draftin</Button>
-                  {undoSnapshot && <Button type="button" variant="outline" onClick={undoDraft}><Undo2 className="h-4 w-4" /> Zhbëj pranimin</Button>}
-                </div>
-                {draft && (
-                  <div className="mt-4 rounded-lg border border-border bg-card p-3" aria-live="polite">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="font-semibold">Parapamja e plotësimit</h4>
-                      <span className="text-xs font-medium">{draft.changes.length} rubrika të propozuara</span>
-                    </div>
-                    <p className="mt-1 mb-3 text-xs text-muted-foreground">Kjo është vetëm një propozim. Asgjë nuk vendoset në dokument pa klikuar “Prano draftin”.</p>
-                    <div className="max-h-80 space-y-3 overflow-y-auto">
-                      {draft.changes.map((ch) => (
-                        <div key={ch.field} className="rounded-md border border-border bg-background p-2.5">
-                          <div className="flex justify-between gap-2 text-xs font-semibold"><span>{ch.label}</span><span className="text-muted-foreground">{ch.source}</span></div>
-                          <p className="mt-1 whitespace-pre-wrap break-words text-sm">{ch.proposed}</p>
-                        </div>
-                      ))}
-                      {draft.skipped.length > 0 && <p className="text-xs text-muted-foreground">{draft.skipped.length} fusha ekzistuese u ruajtën pa u ndryshuar.</p>}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button disabled={!draft.changes.length} type="button" onClick={acceptDraft}><Check className="h-4 w-4" /> Prano draftin</Button>
-                      <Button variant="outline" type="button" onClick={() => setDraft(null)}><X className="h-4 w-4" /> Anulo</Button>
-                    </div>
-                  </div>
-                )}
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Asnjë diagnozë, rezultat, alergji apo dozë nuk supozohet. Mjeku verifikon përmbajtjen. Shënimi nuk dërgohet në server.
-                </p>
-              </section>
               <section aria-label="Shabllon i gatshëm për plotësim" className="mt-5 rounded-xl border border-teal/25 bg-card p-4">
                 <div className="flex items-start gap-3">
                   <FilePenLine className="mt-1 h-5 w-5 shrink-0 text-teal" />
@@ -452,6 +408,50 @@ export function ReferralApp() {
                     )}
                   </div>
                 )}
+              </section>
+              <section aria-label="Përgatitje automatike e udhëzimit" className="mt-5 rounded-xl border-2 border-teal/20 bg-teal-soft/20 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <WandSparkles className="h-5 w-5 text-teal" />
+                  <h3 className="font-serif text-base font-semibold">Shkruaj shkurt, krijo draftin</h3>
+                </div>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Shkruaj një rresht ose disa shënime. Për shembull: <em>palpitacione prej 3 ditësh; TA: 150/90; EKG: e kryer</em>.
+                  Rubrikat plotësohen vetëm nga fjalët e tua dhe nga kërkesa e përgjithshme e shabllonit.
+                </p>
+                <Label htmlFor="quick-draft">Shënimi i mjekut</Label>
+                <Textarea id="quick-draft" value={quickNote}
+                  onChange={(e) => { setQuickNote(e.target.value); setDraft(null); }}
+                  className="mt-1.5 min-h-28 bg-card" rows={4}
+                  placeholder={"Ankesa: kollë prej 5 ditësh; TA: 120/80; Temp: 38.2°C; EKG: e kryer; Trajtimi: ...\nDiagnoza: shkruaj vetëm nëse e ke vendosur\nPyetja: ..."} />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" onClick={prepareDraft}><WandSparkles className="h-4 w-4" /> Përgatit draftin</Button>
+                  {undoSnapshot && <Button type="button" variant="outline" onClick={undoDraft}><Undo2 className="h-4 w-4" /> Zhbëj pranimin</Button>}
+                </div>
+                {draft && (
+                  <div className="mt-4 rounded-lg border border-border bg-card p-3" aria-live="polite">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-semibold">Parapamja e plotësimit</h4>
+                      <span className="text-xs font-medium">{draft.changes.length} rubrika të propozuara</span>
+                    </div>
+                    <p className="mt-1 mb-3 text-xs text-muted-foreground">Kjo është vetëm një propozim. Asgjë nuk vendoset në dokument pa klikuar “Prano draftin”.</p>
+                    <div className="max-h-80 space-y-3 overflow-y-auto">
+                      {draft.changes.map((ch) => (
+                        <div key={ch.field} className="rounded-md border border-border bg-background p-2.5">
+                          <div className="flex justify-between gap-2 text-xs font-semibold"><span>{ch.label}</span><span className="text-muted-foreground">{ch.source}</span></div>
+                          <p className="mt-1 whitespace-pre-wrap break-words text-sm">{ch.proposed}</p>
+                        </div>
+                      ))}
+                      {draft.skipped.length > 0 && <p className="text-xs text-muted-foreground">{draft.skipped.length} fusha ekzistuese u ruajtën pa u ndryshuar.</p>}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button disabled={!draft.changes.length} type="button" onClick={acceptDraft}><Check className="h-4 w-4" /> Prano draftin</Button>
+                      <Button variant="outline" type="button" onClick={() => setDraft(null)}><X className="h-4 w-4" /> Anulo</Button>
+                    </div>
+                  </div>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Asnjë diagnozë, rezultat, alergji apo dozë nuk supozohet. Mjeku verifikon përmbajtjen. Shënimi nuk dërgohet në server.
+                </p>
               </section>
               <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                 <Button variant="secondary" size="sm" onClick={cleanAll}><Eraser className="h-4 w-4" />Pastro formatimin</Button>
