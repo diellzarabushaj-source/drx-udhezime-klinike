@@ -79,7 +79,8 @@ export function cleanText(s: string): string {
 export interface CheckItem { key: string; label: string; done: boolean }
 
 export function checkEssentials(r: Referral): CheckItem[] {
-  const f = (v: string) => v.trim().length > 0;
+  // A filled-in template marker is not a completed clinical observation.
+  const f = (v: string) => v.trim().length > 0 && !/\[(?:plotëso|konfirmo):[^\]]+\]/i.test(v);
   return [
     { key: "fromInstitution", label: "Institucioni udhëzues", done: f(r.fromInstitution) },
     { key: "toService", label: "Specialiteti / shërbimi i adresuar", done: f(r.toService) },
