@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TEMPLATES, emptyReferral, templateCategory } from "./referral";
 import { normalizeSearch, proposeQuickDraft } from "./smart-draft";
+import { prepareCompleteTemplate, findTemplateSlots } from "./ready-template";
 
 describe("DRX shabllonet klinike", () => {
   it("provides over 100 unique specialty templates", () => {
@@ -67,5 +68,37 @@ describe("DRX ndihmës i draftit", () => {
   it("searches Albanian keywords with or without accents", () => {
     expect(normalizeSearch("Gjakderdhje nga hunda")).toBe("gjakderdhje nga hunda");
     expect(normalizeSearch("Ënjtje, Çrregullim!")).toBe("enjtje crregullim");
+  });
+});
+
+describe("Mbushja automatike mbi shabllonet e gatshme", () => {
+  const t = TEMPLATES.find((x) => x.id === "palpitacione")!;
+  it("fills vitals, investigations and a reported complaint without deleting the prepared paragraphs", () => {
+    const prepared = prepareCompleteTemplate(emptyReferral(), t).next;
+    const before = findTemplateSlots(prepared).length;
+    const draft = proposeQuickDraft(prepared, t,
+      "palpitacione prej 3 ditësh; TA: 150/90; EKG: e kryer");
+    expect(draft.changes.map((x) => x.field)).toContain("vitals");
+    expect(draft.changes.map((x) => x.field)).toContain("diagnostics");
+    expect(draft.next.vitals).toContain("TA: 150/90");
+    expect(draft.next.vitals).not.toContain("[plotëso:");
+    expect(draft.next.diagnostics).toContain("EKG: e kryer");
+    expect(draft.next.diagnostics).not.toContain("[plotëso:");
+    expect(draft.next.reason).toContain("palpitacione prej 3 ditësh");
+    expect(draft.next.history).toContain("palpitacione prej 3 ditësh");
+    expect(draft.next.diagnosis).toBe("");
+    expect(draft.next.icd).toBe("");
+    expect(draft.next.allergies).toBe(prepared.allergies);
+    expect(draft.next.exam).toBe(prepared.exam);
+    expect(findTemplateSlots(draft.next).length).toBeLessThan(before);
+  });
+  it("never changes clinician documented measurements", () => {
+    const ready = prepareCompleteTemplate(emptyReferral(),t).next;
+    const clinicianEdited = { ...ready, vitals: "TA e matur: 130/80 mmHg", diagnostics: "EKG: pa raport të shkruar" };
+    const drafted = proposeQuickDraft(clinicianEdited,t,"TA: 150/90; EKG: e kryer");
+    expect(drafted.next.vitals).toBe(clinicianEdited.vitals);
+    expect(drafted.next.diagnostics).toBe(clinicianEdited.diagnostics);
+    expect(drafted.skipped).toContain("vitals");
+    expect(drafted.skipped).toContain("diagnostics");
   });
 });
