@@ -1,4 +1,5 @@
 import { DEFAULT_TITLE, formatDate, sexLabel, type Referral } from "@/lib/referral";
+import { findTemplateSlots, TEMPLATE_MARKER } from "@/lib/ready-template";
 
 /** Printed transcription of the provided Kosovo consultation-referral grid.
  * It does not generate an official serial number, seal or institutional authorization. */
@@ -23,7 +24,22 @@ function NumberBoxes({ digits, count = 13 }: { digits: string; count?: number })
 }
 
 function PaperText({ value }: { value: string }) {
-  return <div className="kos-written">{value.trim()}</div>;
+  const text = value.trim();
+  const parts: Array<{ text: string; unfinished: boolean }> = [];
+  let last = 0;
+  TEMPLATE_MARKER.lastIndex = 0;
+  for (const match of text.matchAll(TEMPLATE_MARKER)) {
+    const index = match.index ?? 0;
+    if (index > last) parts.push({ text: text.slice(last,index), unfinished: false });
+    parts.push({ text: match[0], unfinished: true });
+    last = index + match[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), unfinished: false });
+  return <div className="kos-written">{parts.map((part,index) =>
+    part.unfinished
+      ? <span key={index} className="kos-placeholder">{part.text}</span>
+      : <span key={index}>{part.text}</span>
+  )}</div>;
 }
 
 function Row({ title, value, codeLabel, codeValue, rightSmall }: {
@@ -57,6 +73,7 @@ export function ReferralDocument({ r }: { r: Referral }) {
   const diagnosis = r.diagnosis.trim();
   const exam = joinValues(r.exam, r.vitals ? "Shenjat vitale: " + r.vitals : "", r.diagnostics ? "Ekzaminimet diagnostike: " + r.diagnostics : "");
   const purpose = joinValues(r.reason, r.question ? "Kërkesa për konsultë: " + r.question : "");
+  const pending = findTemplateSlots(r).length;
   const issued = formatDate(r.issueDate);
   const issueParts = issued.split(".");
   return (
@@ -69,6 +86,7 @@ export function ReferralDocument({ r }: { r: Referral }) {
       <div className="kos-title-line">
         <strong>{(r.title || DEFAULT_TITLE).toUpperCase()} / UPUT ZA KONSULTACIJU</strong>
         <span className="kos-title-note">Jo formular origjinal i lëshuar nga autoritetet</span>
+        {pending > 0 && <span className="kos-unfinished-note">DRAFT I PAPLOTË · {pending} hapësira për plotësim/konfirmim</span>}
       </div>
 
       <div className="kos-twin-tables">
