@@ -1,5 +1,6 @@
 import type { Referral, Template } from "./referral";
 import { cleanText } from "./referral";
+import { findTemplateSlots, replaceTemplateSlot } from "./ready-template";
 
 /** Every suggested statement comes from the clinician's typed input or the
  * selected template's generic consultation REQUEST. No medical facts are inferred. */
@@ -98,16 +99,41 @@ export function proposeQuickDraft(current: Referral, selected: Template, userInp
 
   const next = { ...current };
   const changes: DraftChange[] = [], skipped: DraftField[] = [];
+  const typedSources = new Set<DraftField>();
+  for (const [key] of buckets) typedSources.add(key);
   for (const key of ALLOWED) {
     const val = buckets.get(key)?.join("\n").trim() ?? "";
     if (!val) continue;
-    if (String(current[key]).trim()) {
-      skipped.push(key); continue;
+    const original = String(current[key]);
+    let proposal = val;
+    if (original.trim()) {
+      // A prepared paragraph is not a completed clinical finding.
+      // Keep its wording, and fill exactly ONE patient-data placeholder
+      // only from information the clinician explicitly typed.
+      if (!typedSources.has(key) || !["reason","history","allergies","exam","vitals","diagnostics","therapy"].includes(key)) {
+        skipped.push(key); continue;
+      }
+      const slots = findTemplateSlots(next).filter((slot) =>
+        slot.field === key && slot.marker.toLowerCase().startsWith("[plotëso:")
+      );
+      const preferred = slots.find((slot) =>
+        key === "history" ? /ankesat e raportuara/i.test(slot.prompt) :
+        key === "reason" ? /ankesa kryesore/i.test(slot.prompt) :
+        key === "vitals" ? /ta|puls|spO/i.test(slot.prompt) :
+        key === "diagnostics" ? /analizat|ekzaminimet/i.test(slot.prompt) :
+        true
+      ) ?? slots[0];
+      if (!preferred) { skipped.push(key); continue; }
+      const factualValue = key === "history" ? val.replace(/^Ankesa e raportuar:\s*/i, "") : val;
+      const merged = replaceTemplateSlot(next, preferred, factualValue);
+      if (merged === next) { skipped.push(key); continue; }
+      proposal = String(merged[key]);
     }
-    next[key] = val as never;
+    next[key] = proposal as never;
     changes.push({
-      field: key, label: NAMES[key], current: String(current[key]),
-      proposed: val, source: key === "question" || key === "toService" ? "Kërkesa e shabllonit" : "Shënimi i mjekut"
+      field: key, label: NAMES[key], current: original,
+      proposed: proposal,
+      source: typedSources.has(key) ? "Shënimi i mjekut" : "Kërkesa e shabllonit",
     });
   }
   return { changes, skipped, next };
