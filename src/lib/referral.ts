@@ -1,3 +1,5 @@
+import { ADDITIONAL_TEMPLATES } from "./template-library";
+
 export type Urgency = "Rutine" | "Prioritar" | "Urgjent";
 
 export interface Referral {
@@ -152,7 +154,25 @@ export interface Template {
   id: string;
   label: string;
   service: string;
+  /** Navigation only, never printed as patient facts. */
+  category?: string;
+  keywords?: string[];
+  /** Standard generic consultation request; it requires clinician approval. */
+  request?: string;
   fields: Partial<Record<keyof Referral, string>>;
+}
+
+const BASE_TEMPLATE_CATEGORIES: Record<string, string> = {
+  bosh: "Të përgjithshme", kardio: "Kardiologji", neuro: "Neurologji",
+  kirurgji: "Kirurgji dhe traumatologji", pediatri: "Pediatri",
+  orl: "Otorinolaringologji", gjinekologji: "Gjinekologji",
+  ortopedi: "Kirurgji dhe traumatologji", radiologji: "Mjekësi familjare dhe të tjera",
+  interne: "Mjekësi familjare dhe të tjera", dermatologji: "Dermatologji",
+  urologji: "Urologji dhe nefrologji", urgjence: "Urgjencë",
+  oftalmologji: "Oftalmologji", psikiatri: "Psikiatri dhe psikologji"
+};
+export function templateCategory(t: Template): string {
+  return t.category ?? BASE_TEMPLATE_CATEGORIES[t.id] ?? "Të përgjithshme";
 }
 
 /** Shabllonet janë udhëzues për mjekun, jo fakte për pacientin. */
@@ -213,7 +233,8 @@ export const TEMPLATES: Template[] = [
     exam:"Mprehtësia vizuale dhe gjetjet okulare vetëm nëse janë matur." }},
   { id:"psikiatri", label:"Psikiatri", service:"Psikiatri", fields:{
     history:"Shqetësimet, kohëzgjatja, faktorët shoqërues dhe historiku relevant.",
-    question:"Qëllimi i konsultës dhe urgjenca klinike." }}
+    question:"Qëllimi i konsultës dhe urgjenca klinike." }},
+  ...ADDITIONAL_TEMPLATES
 ];
 
 export function applyTemplate(r: Referral, t: Template): Referral {
