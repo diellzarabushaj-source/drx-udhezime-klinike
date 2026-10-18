@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import {
   Building2, User, Stethoscope, FileText, ClipboardCheck, Printer, Copy, Check, Eraser, Sparkles,
   RotateCcw, ShieldCheck, Eye, PencilLine, CircleAlert, CircleCheck, UserRound, LayoutTemplate,
-  WandSparkles, Undo2, ListFilter, CheckCircle2, X,
+  WandSparkles, Undo2, ListFilter, CheckCircle2, X, FilePenLine, ListChecks, ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
 import { ReferralDocument } from "./ReferralDocument";
 import icdCatalog from "@/data/icd-qkmf.json";
 import { normalizeSearch, proposeQuickDraft, type QuickDraft } from "@/lib/smart-draft";
+import { findTemplateSlots, prepareCompleteTemplate, replaceTemplateSlot, type PreparedProposal } from "@/lib/ready-template";
 
 type K = keyof Referral;
 
@@ -43,6 +44,9 @@ export function ReferralApp() {
   const [icdSearch, setIcdSearch] = useState("");
   const [category, setCategory] = useState("Të gjitha");
   const [quickNote, setQuickNote] = useState("");
+  const [prepared, setPrepared] = useState<PreparedProposal | null>(null);
+  const [slotTarget, setSlotTarget] = useState("");
+  const [slotValue, setSlotValue] = useState("");
   const [draft, setDraft] = useState<QuickDraft | null>(null);
   const [undoSnapshot, setUndoSnapshot] = useState<Referral | null>(null);
   const [notice, setNotice] = useState("");
@@ -70,6 +74,54 @@ export function ReferralApp() {
   }, [icdSearch]);
   const done = checks.filter((c) => c.done).length;
   const pct = Math.round((done / checks.length) * 100);
+  const templateSlots = useMemo(() => findTemplateSlots(r), [r]);
+  const activeSlot = templateSlots.find((slot) => slot.id === slotTarget) ?? templateSlots[0];
+
+  const showPreparedTemplate = () => {
+    if (activeTemplate.id === "bosh") {
+      flash("Së pari zgjidhni një shabllon nga biblioteka.");
+      return;
+    }
+    setPrepared(prepareCompleteTemplate(r, activeTemplate));
+  };
+
+  const acceptPreparedTemplate = () => {
+    if (!prepared?.changes.length) {
+      flash("Fushat ekzistuese u ruajtën; nuk ka rubrika të zbrazëta për të plotësuar.");
+      return;
+    }
+    setUndoSnapshot(r);
+    setR(prepareCompleteTemplate(r, activeTemplate).next);
+    setPrepared(null);
+    setSlotTarget("");
+    setSlotValue("");
+    flash("Shablloni u vendos. Plotëso hapësirat për pacientin para printimit.");
+  };
+
+  const fillSelectedSlot = () => {
+    if (!activeSlot || !slotValue.trim()) {
+      flash("Shkruani të dhënën përpara se ta vendosni në shabllon.");
+      return;
+    }
+    const next = replaceTemplateSlot(r, activeSlot, slotValue);
+    if (next === r) {
+      flash("Nuk u bë ndryshim. Ju lutemi shkruani të dhënën pa shënuesit e shabllonit.");
+      return;
+    }
+    setR(next);
+    setSlotTarget("");
+    setSlotValue("");
+    setUndoSnapshot(null);
+    flash("E dhëna u vendos në dokument. Vazhdoni me hapësirën tjetër.");
+  };
+
+  const printWithReview = () => {
+    if (templateSlots.length && !window.confirm(
+      "Në dokument mbeten " + templateSlots.length + " hapësira [plotëso/konfirmo]. " +
+      "Të dhënat e pacientit nuk janë të plota. Dëshironi të printoni vetëm draftin?"
+    )) return;
+    window.print();
+  };
 
   const prepareDraft = () => {
     if (!quickNote.trim()) {
@@ -178,7 +230,7 @@ export function ReferralApp() {
               <Button variant="outline" size="sm" onClick={copy} aria-label="Kopjo si tekst">
                 {copied ? <Check className="h-4 w-4 text-teal" /> : <Copy className="h-4 w-4" />}<span className="hidden md:inline">Kopjo tekstin</span>
               </Button>
-              <Button size="sm" onClick={() => window.print()}>
+              <Button size="sm" onClick={printWithReview}>
                 <Printer className="h-4 w-4" /><span className="hidden sm:inline">Printo / PDF</span>
               </Button>
             </div>
@@ -229,6 +281,9 @@ export function ReferralApp() {
                       onClick={() => {
                         setTemplateId(t.id);
                         setDraft(null);
+                        setPrepared(null);
+                        setSlotTarget("");
+                        setSlotValue("");
                         setR((p) => ({
                           ...applyTemplate(p,t),
                           toService: (!p.toService.trim() || (activeTemplate.service && p.toService === activeTemplate.service))
@@ -307,6 +362,97 @@ export function ReferralApp() {
                   Asnjë diagnozë, rezultat, alergji apo dozë nuk supozohet. Mjeku verifikon përmbajtjen. Shënimi nuk dërgohet në server.
                 </p>
               </section>
+              <section aria-label="Shabllon i gatshëm për plotësim" className="mt-5 rounded-xl border border-teal/25 bg-card p-4">
+                <div className="flex items-start gap-3">
+                  <FilePenLine className="mt-1 h-5 w-5 shrink-0 text-teal" />
+                  <div>
+                    <h3 className="font-serif text-base font-semibold">Udhëzim pothuajse i gatshëm</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Për secilin shabllon krijohen paragrafët standardë në rubrikat e konsultës.
+                      Ju plotësoni vetëm pjesët në kllapa, sipas anamnezës, ekzaminimit dhe rezultateve reale.
+                      Të dhënat që i keni shkruar tashmë nuk zëvendësohen.
+                    </p>
+                  </div>
+                </div>
+                <Button type="button" className="mt-3 w-full sm:w-auto" disabled={activeTemplate.id === "bosh"}
+                  onClick={showPreparedTemplate}>
+                  <WandSparkles className="h-4 w-4" /> Mbush formularin me shabllon
+                </Button>
+                {activeTemplate.id === "bosh" && <p className="mt-2 text-xs text-muted-foreground">Zgjidhni së pari një nga {TEMPLATES.length - 1} shabllonet e gatshme.</p>}
+                {prepared && (
+                  <div className="mt-4 space-y-3 rounded-lg border border-border bg-muted/40 p-3" aria-live="polite">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="text-sm">Parapamja para pranimit</strong>
+                      <span className="text-xs text-teal">{prepared.changes.length} fusha të përgatitura</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Janë përgatitur {prepared.pending} hapësira për plotësim ose konfirmim.
+                      Diagnoza dhe kodi ICD-10 nuk krijohen automatikisht.
+                    </p>
+                    <div className="max-h-80 space-y-2 overflow-y-auto">
+                      {prepared.changes.map((change) => (
+                        <div key={change.field} className="rounded-md border bg-card p-3">
+                          <div className="mb-1 text-xs font-semibold">{change.label}</div>
+                          <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{change.proposed}</p>
+                        </div>
+                      ))}
+                      {prepared.preserved.length > 0 && <p className="text-xs text-muted-foreground">
+                        {prepared.preserved.length} rubrika ekzistuese nuk do të ndryshohen.
+                      </p>}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" disabled={!prepared.changes.length} onClick={acceptPreparedTemplate}>
+                        <Check className="h-4 w-4" /> Prano dhe hape për plotësim
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setPrepared(null)}>
+                        <X className="h-4 w-4" /> Anulo
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {templateSlots.length > 0 && (
+                  <div className="mt-4 border-t border-border pt-4" aria-label="Plotëso hapësirat një nga një">
+                    <div className="flex items-center gap-2">
+                      <ListChecks className="h-4 w-4 text-teal" />
+                      <strong className="text-sm">Plotëso hapësirat</strong>
+                      <span className="ml-auto rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">{templateSlots.length} mbeten</span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Zgjidh një pikë dhe shkruaj vetëm të dhënën e konfirmuar. Teksti profesional i shabllonit mbetet i gatshëm.
+                    </p>
+                    <div className="mt-3 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+                      {templateSlots.map((slot) => (
+                        <button key={slot.id} type="button"
+                          aria-pressed={activeSlot?.id === slot.id}
+                          className={cn("rounded-md border px-2 py-1 text-xs transition",
+                            activeSlot?.id === slot.id
+                              ? "border-teal bg-teal-soft text-teal"
+                              : "border-border bg-background text-muted-foreground hover:border-teal/60")}
+                          onClick={() => { setSlotTarget(slot.id); setSlotValue(""); }}>
+                          {slot.label}
+                        </button>
+                      ))}
+                    </div>
+                    {activeSlot && (
+                      <div className="mt-3 rounded-lg border border-teal/30 bg-teal-soft/20 p-3">
+                        <Label htmlFor="slot-answer">Plotëso: {activeSlot.prompt}</Label>
+                        <Input id="slot-answer" value={slotValue} autoComplete="off"
+                          onChange={(e) => setSlotValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); fillSelectedSlot(); } }}
+                          placeholder="Shkruaj vetëm të dhënën e verifikuar" className="mt-2 bg-card" />
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button type="button" onClick={fillSelectedSlot} disabled={!slotValue.trim()}>
+                            Vendose dhe vazhdo <ArrowRight className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="outline" onClick={() => focusField(activeSlot.field)}>
+                            Edito rubrikën
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
               <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                 <Button variant="secondary" size="sm" onClick={cleanAll}><Eraser className="h-4 w-4" />Pastro formatimin</Button>
                 <AlertDialog>
@@ -320,7 +466,7 @@ export function ReferralApp() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Anulo</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); setTemplateId("bosh"); setTemplateSearch(""); setIcdSearch(""); setCategory("Të gjitha"); setQuickNote(""); setDraft(null); setUndoSnapshot(null); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); setTemplateId("bosh"); setTemplateSearch(""); setIcdSearch(""); setCategory("Të gjitha"); setQuickNote(""); setDraft(null); setPrepared(null); setSlotTarget(""); setSlotValue(""); setUndoSnapshot(null); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
