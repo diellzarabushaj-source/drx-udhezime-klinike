@@ -47,6 +47,7 @@ export function ReferralApp() {
   const [prepared, setPrepared] = useState<PreparedProposal | null>(null);
   const [slotTarget, setSlotTarget] = useState("");
   const [slotValue, setSlotValue] = useState("");
+  const [templateStepCount, setTemplateStepCount] = useState(0);
   const [draft, setDraft] = useState<QuickDraft | null>(null);
   const [undoSnapshot, setUndoSnapshot] = useState<Referral | null>(null);
   const [notice, setNotice] = useState("");
@@ -55,7 +56,13 @@ export function ReferralApp() {
     setR((p) => (p.issueDate ? p : { ...p, issueDate: todayISO() }));
   }, []);
 
-  const set = (k: K) => (v: string) => setR((p) => ({ ...p, [k]: v }));
+  const set = (k: K) => (v: string) => {
+    // Manual edits invalidate older proposed snapshots and undo states.
+    setPrepared(null);
+    setDraft(null);
+    setUndoSnapshot(null);
+    setR((p) => ({ ...p, [k]: v }));
+  };
   const checks = useMemo(() => checkEssentials(r), [r]);
   const activeTemplate = TEMPLATES.find((t) => t.id === templateId) ?? TEMPLATES[0]!;
   const categories = useMemo(() => ["Të gjitha", ...Array.from(new Set(TEMPLATES.map(templateCategory))).sort((a,b) => a.localeCompare(b, "sq"))], []);
@@ -68,14 +75,18 @@ export function ReferralApp() {
   }, [templateSearch, category]);
   const suggestions = useMemo(() => clinicalSuggestions(r.reason), [r.reason]);
   const icdMatches = useMemo(() => {
-    const q = icdSearch.toLocaleLowerCase("sq").trim();
+    const q = normalizeSearch(icdSearch);
     if (q.length < 2) return [];
-    return icdCatalog.rows.filter((row) => [row.code, row.label_sq, ...row.aliases].some((v) => v.toLocaleLowerCase("sq").includes(q))).slice(0, 8);
+    return icdCatalog.rows.filter((row) =>
+      [row.code, row.label_sq, ...row.aliases].some((v) => normalizeSearch(v).includes(q))
+    ).slice(0, 8);
   }, [icdSearch]);
   const done = checks.filter((c) => c.done).length;
   const pct = Math.round((done / checks.length) * 100);
   const templateSlots = useMemo(() => findTemplateSlots(r), [r]);
   const activeSlot = templateSlots.find((slot) => slot.id === slotTarget) ?? templateSlots[0];
+  const urgentTemplate = templateCategory(activeTemplate) === "Urgjencë" || activeTemplate.id === "urgjence";
+  const isUrgencyMismatch = urgentTemplate && r.urgency !== "Urgjent";
 
   const showPreparedTemplate = () => {
     if (activeTemplate.id === "bosh") {
@@ -95,6 +106,7 @@ export function ReferralApp() {
     setPrepared(null);
     setSlotTarget("");
     setSlotValue("");
+    setTemplateStepCount(prepared.pending);
     flash("Shablloni u vendos. Plotëso hapësirat për pacientin para printimit.");
   };
 
@@ -108,17 +120,22 @@ export function ReferralApp() {
       flash("Nuk u bë ndryshim. Ju lutemi shkruani të dhënën pa shënuesit e shabllonit.");
       return;
     }
+    setUndoSnapshot(r);
     setR(next);
     setSlotTarget("");
     setSlotValue("");
-    setUndoSnapshot(null);
     flash("E dhëna u vendos në dokument. Vazhdoni me hapësirën tjetër.");
   };
 
   const printWithReview = () => {
-    if (templateSlots.length && !window.confirm(
-      "Në dokument mbeten " + templateSlots.length + " hapësira [plotëso/konfirmo]. " +
-      "Të dhënat e pacientit nuk janë të plota. Dëshironi të printoni vetëm draftin?"
+    if (isUrgencyMismatch && !window.confirm(
+      "Keni zgjedhur shabllon për URGJENCË, por prioriteti mbetet " + r.urgency +
+      ". Verifikoni prioritetin dhe përdorni rrugën institucionale të urgjencës. A dëshironi të vazhdoni?"
+    )) return;
+    const missing = checks.filter((item) => !item.done);
+    if ((templateSlots.length || missing.length) && !window.confirm(
+      "Ky është DRAFT I PAPLOTË: " + templateSlots.length + " hapësira për plotësim dhe " +
+      missing.length + " rubrika bazë ende pa verifikim. A dëshironi të printoni vetëm draftin?"
     )) return;
     window.print();
   };
@@ -151,6 +168,11 @@ export function ReferralApp() {
   const flash = (msg: string) => { setNotice(msg); window.setTimeout(() => setNotice(""), 2200); };
 
   const copy = async () => {
+    const missing = checks.filter((item) => !item.done).length;
+    if ((templateSlots.length || missing) && !window.confirm(
+      "Udhëzimi nuk është plotësuar: " + templateSlots.length +
+      " hapësira dhe " + missing + " rubrika bazë. Dëshironi të kopjoni DRAFTIN e paplotë?"
+    )) return;
     try {
       await navigator.clipboard.writeText(toPlainText(r));
       setCopied(true); flash("Teksti i udhëzimit u kopjua.");
@@ -159,6 +181,9 @@ export function ReferralApp() {
   };
 
   const cleanAll = () => {
+    setUndoSnapshot(null);
+    setPrepared(null);
+    setDraft(null);
     setR((p) => {
       const n = { ...p };
       (Object.keys(n) as K[]).forEach((k) => { if (typeof n[k] === "string" && k !== "urgency" && k !== "patientSex") (n as Record<string, string>)[k] = cleanText(n[k] as string); });
@@ -284,6 +309,8 @@ export function ReferralApp() {
                         setPrepared(null);
                         setSlotTarget("");
                         setSlotValue("");
+                        setUndoSnapshot(null);
+                        setTemplateStepCount(0);
                         setR((p) => ({
                           ...applyTemplate(p,t),
                           toService: (!p.toService.trim() || (activeTemplate.service && p.toService === activeTemplate.service))
@@ -318,6 +345,15 @@ export function ReferralApp() {
                   </div>
                 )}
               </div>
+              {isUrgencyMismatch && (
+                <div role="alert" className="mt-3 rounded-lg border border-urgent/40 bg-warning-soft p-3 text-sm">
+                  <strong className="block text-urgent">Kujdes: Shabllon urgjent</strong>
+                  <p className="mt-1 text-xs">Prioriteti është ende “{r.urgency}”. Konfirmoni përparësinë sipas vlerësimit klinik. Formulari nuk duhet të vonojë stabilizimin ose transferimin sipas protokollit.</p>
+                  <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => {
+                    if (window.confirm("Vendos prioritetin URGJENT për këtë udhëzim? Vendimi klinik mbetet i mjekut.")) set("urgency")("Urgjent");
+                  }}>Konfirmo “Urgjent”</Button>
+                </div>
+              )}
               <section aria-label="Shabllon i gatshëm për plotësim" className="mt-5 rounded-xl border border-teal/25 bg-card p-4">
                 <div className="flex items-start gap-3">
                   <FilePenLine className="mt-1 h-5 w-5 shrink-0 text-teal" />
@@ -373,6 +409,11 @@ export function ReferralApp() {
                       <strong className="text-sm">Plotëso hapësirat</strong>
                       <span className="ml-auto rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">{templateSlots.length} mbeten</span>
                     </div>
+                    {templateStepCount > 0 && (
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" aria-label={"Plotësimi i shabllonit: " + Math.max(0,templateStepCount-templateSlots.length) + " nga " + templateStepCount}>
+                        <div className="h-full bg-teal transition-all" style={{width: Math.min(100,Math.max(0,100*(templateStepCount-templateSlots.length)/templateStepCount))+"%"}} />
+                      </div>
+                    )}
                     <p className="mt-2 text-xs text-muted-foreground">
                       Zgjidh një pikë dhe shkruaj vetëm të dhënën e konfirmuar. Teksti profesional i shabllonit mbetet i gatshëm.
                     </p>
@@ -466,7 +507,7 @@ export function ReferralApp() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Anulo</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); setTemplateId("bosh"); setTemplateSearch(""); setIcdSearch(""); setCategory("Të gjitha"); setQuickNote(""); setDraft(null); setPrepared(null); setSlotTarget(""); setSlotValue(""); setUndoSnapshot(null); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { setR(emptyReferral(todayISO())); setTemplateId("bosh"); setTemplateSearch(""); setIcdSearch(""); setCategory("Të gjitha"); setQuickNote(""); setDraft(null); setPrepared(null); setSlotTarget(""); setSlotValue(""); setTemplateStepCount(0); setUndoSnapshot(null); flash("Formulari u pastrua."); }}>Po, pastroje</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -555,7 +596,15 @@ export function ReferralApp() {
                       <div className="max-h-56 overflow-y-auto rounded-md border bg-card p-1 text-xs" role="listbox" aria-label="Sugjerime ICD-10">
                         {icdMatches.map((c) => (
                           <button key={c.code} type="button" role="option" aria-selected={r.icd === c.code}
-                            onClick={() => { set("icd")(c.code); setIcdSearch(c.code); flash("Kodi u zgjodh; kontrolloni diagnozën klinike."); }}
+                            onClick={() => {
+                              if (!window.confirm(
+                                "Kodi ICD-10: " + c.code + " — " + c.label_sq +
+                                ". Verifikoni që kodi i përshtatet diagnozës klinike. A e konfirmoni?"
+                              )) return;
+                              if (r.icd && r.icd !== c.code && !window.confirm("Të zëvendësohet kodi ekzistues " + r.icd + "?")) return;
+                              set("icd")(c.code); setIcdSearch(c.code);
+                              flash("Kodi u konfirmua nga mjeku. Diagnoza nuk plotësohet automatikisht.");
+                            }}
                             className="flex w-full items-start gap-2 rounded px-2 py-2 text-left hover:bg-muted focus-visible:bg-muted">
                             <strong>{c.code}</strong><span>{c.label_sq}</span>
                           </button>
