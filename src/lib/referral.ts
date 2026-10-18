@@ -114,6 +114,11 @@ export function toPlainText(r: Referral): string {
   const out: string[] = [];
   const line = (k: string, v: string) => v.trim() && out.push(`${k}: ${v.trim()}`);
   out.push((r.title || DEFAULT_TITLE).toUpperCase(), `Urgjenca: ${r.urgency}`);
+  const missing = checkEssentials(r).filter((item) => !item.done).length;
+  const pending = Object.values(r).some((value) => typeof value === "string" && /\[(?:plotëso|konfirmo):[^\]]+\]/i.test(value));
+  if (missing || pending) {
+    out.push("DRAFT I PAPLOTË — verifikimi dhe plotësimi nga mjeku janë të domosdoshëm.");
+  }
   line("Data", formatDate(r.issueDate));
   out.push("");
   line("Nga institucioni", r.fromInstitution);
